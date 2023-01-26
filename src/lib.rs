@@ -1,22 +1,18 @@
-use std::fs;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Lines};
 use std::env;
 use std::error::Error;
 use std::process;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(&config.file_path)?;
-
-    let results = if config.ignore_case {
-        let query = config.query.to_lowercase();
-        contents
-            .lines()
-            .filter(|line| line.to_lowercase().contains(&query))
-    } else {
-        contents
-            .lines()
-            .filter(|line| line.contains(&config.query))
-    };
-
+    let f = File::open(&config.file_path)?;
+    let reader = BufReader::new(f);
+    let stdin = io::stdin().lock();
+    let lines2 = stdin.lines();
+    let lines = reader.lines();
+    let results = lines2
+        .map(|l| l.unwrap())
+        .filter(|l| l.contains(&config.query));
     for line in results {
         println!("{line}");
     }
@@ -68,36 +64,32 @@ impl Config {
     }
 }
 
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    contents
-        .lines()
-        .filter(|line| line.contains(query))
-        .collect()
-}
+//pub fn search<'a>(query: &'a str, lines: std::io::Lines<BufRead>) -> impl Iterator<Item = &'a str> + 'a {
+//    lines.filter(move |line| line.unwrap().contains(query))
+//}
 
-pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     let query = query.to_lowercase();
     contents
         .lines()
-        .filter(|line| line.to_lowercase().contains(&query))
-        .collect()
+        .filter(move |line| line.to_lowercase().contains(&query))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn one_result() {
-        let query = "duct";
-        let contents = "\
-Rust:
-safe, fast, productive.
-Pick three.
-Duct tape.";
+//    #[test]
+//     fn one_result() {
+//         let query = "duct";
+//         let contents = "\
+// Rust:
+// safe, fast, productive.
+// Pick three.
+// Duct tape.";
 
-        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
-    }
+//         assert_eq!(Some("safe, fast, productive."), search(query, contents).next());
+//     }
 
     #[test]
     fn case_insensitive() {
@@ -108,6 +100,9 @@ safe, fast, productive.
 Pick three.
 Trust me.";
 
-        assert_eq!(vec!["Rust:", "Trust me."], search_case_insensitive(query, contents));
+        let mut result = search_case_insensitive(query, contents);
+        assert_eq!(Some("Rust:"), result.next());
+        assert_eq!(Some("Trust me."), result.next());
+        assert_eq!(None, result.next());
     }
 }
