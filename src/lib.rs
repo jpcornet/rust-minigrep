@@ -5,28 +5,28 @@ use std::error::Error;
 use std::process;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let f = File::open(&config.file_path)?;
-    let reader = BufReader::new(f);
-    let stdin = io::stdin().lock();
-    let lines2 = stdin.lines();
-    let lines = reader.lines();
-    let results = lines2
-        .map(|l| l.unwrap())
-        .filter(|l| l.contains(&config.query));
-    for line in results {
-        println!("{line}");
+    let input = config.reader.lines();
+
+    if config.ignore_case {
+        for line in search_case_insensitive(&config.query, input) {
+            println!("{line}");
+        }
+    } else {
+        for line in search(&config.query, input) {
+            println!("{line}");
+        }
     }
     Ok(())
 }
 
 pub struct Config {
     pub query: String,
-    pub file_path: String,
+    pub reader: Box<dyn BufRead>,
     pub ignore_case: bool,
 }
 
 impl Config {
-    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
+    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, String> {
         // skip program name
         args.next();
         let mut ignore_case = false;
@@ -44,7 +44,7 @@ impl Config {
                             query = q;
                             break;
                         } else {
-                            return Err("Need query string after -e");
+                            return Err("Need query string after -e".to_string());
                         }
                     },
                     _ => {
@@ -53,25 +53,34 @@ impl Config {
                     },
                 }
             } else {
-                return Err("Need search pattern");
+                return Err("Need search pattern".to_string());
             }
         }
-        let file_path = match args.next() {
-            Some(arg) => arg,
-            None => return Err("Need input file"),
+        let reader: Box<dyn BufRead> = match args.next() {
+            Some(arg) => {
+                let f = File::open(&arg);
+                if let Err(e) = f {
+                    let formattederr = format!("Cannot open {}: {}", arg, e);
+                    return Err(formattederr);
+                }
+                Box::new(BufReader::new(f.unwrap()))
+            },
+            None => Box::new(io::stdin().lock()),
         };
-        Ok(Config { query, file_path, ignore_case: ignore_case || env::var("IGNORE_CASE").is_ok() })
+        Ok(Config { query, reader, ignore_case: ignore_case || env::var("IGNORE_CASE").is_ok() })
     }
 }
 
-//pub fn search<'a>(query: &'a str, lines: std::io::Lines<BufRead>) -> impl Iterator<Item = &'a str> + 'a {
-//    lines.filter(move |line| line.unwrap().contains(query))
-//}
+pub fn search<'a>(query: &'a str, lines: Lines<Box<dyn BufRead>>) -> impl Iterator<Item = String> + 'a {
+    lines
+        .map(|l| l.unwrap())
+        .filter(move |line| line.contains(query))
+}
 
-pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+pub fn search_case_insensitive<'a>(query: &str, lines: Lines<Box<dyn BufRead>>) -> impl Iterator<Item = String> + 'a {
     let query = query.to_lowercase();
-    contents
-        .lines()
+    lines
+        .map(|l| l.unwrap())
         .filter(move |line| line.to_lowercase().contains(&query))
 }
 
@@ -79,17 +88,23 @@ pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> impl Itera
 mod tests {
     use super::*;
 
-//    #[test]
-//     fn one_result() {
-//         let query = "duct";
-//         let contents = "\
-// Rust:
-// safe, fast, productive.
-// Pick three.
-// Duct tape.";
+    fn to_bufread<'a>(contents: &'a str) -> Box<dyn BufRead + 'a> {
+        let bytes = contents.as_bytes();
+        Box::new(bytes)
+    }
 
-//         assert_eq!(Some("safe, fast, productive."), search(query, contents).next());
-//     }
+    #[test]
+    fn one_result() {
+        let query = "duct";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Duct tape.";
+
+        let input = to_bufread(contents);
+        assert_eq!(Some("safe, fast, productive.".to_string()), search(query, input.lines()).next());
+    }
 
     #[test]
     fn case_insensitive() {
@@ -100,9 +115,10 @@ safe, fast, productive.
 Pick three.
 Trust me.";
 
-        let mut result = search_case_insensitive(query, contents);
-        assert_eq!(Some("Rust:"), result.next());
-        assert_eq!(Some("Trust me."), result.next());
+        let input = to_bufread(contents);
+        let mut result = search_case_insensitive(query, input.lines());
+        assert_eq!(Some("Rust:".to_string()), result.next());
+        assert_eq!(Some("Trust me.".to_string()), result.next());
         assert_eq!(None, result.next());
     }
 }
