@@ -26,6 +26,11 @@ pub struct Config {
 }
 
 impl Config {
+    fn usage() {
+        eprintln!("Usage: minigrep [-i] [-e] pattern [file]");
+        process::exit(0);
+    }
+
     pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, String> {
         // skip program name
         args.next();
@@ -35,10 +40,7 @@ impl Config {
             if let Some(nextarg) = args.next() {
                 match nextarg.as_str() {
                     "-i" => ignore_case = true,
-                    "-h" => {
-                        eprintln!("Usage: minigrep [-i] [-e] pattern file");
-                        process::exit(0);
-                    },
+                    "-h" => Self::usage(),
                     "-e" => {
                         if let Some(q) = args.next() {
                             query = q;
