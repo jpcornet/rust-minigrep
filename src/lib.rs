@@ -7,14 +7,14 @@ use std::process;
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let input = config.reader.lines();
 
-    if config.ignore_case {
-        for line in search_case_insensitive(&config.query, input) {
-            println!("{line}");
-        }
+    let result = if config.ignore_case {
+        search_case_insensitive(&config.query, input)
     } else {
-        for line in search(&config.query, input) {
-            println!("{line}");
-        }
+        search(&config.query, input)
+    };
+
+    for line in result {
+        println!("{line}");
     }
     Ok(())
 }
@@ -58,12 +58,10 @@ impl Config {
         }
         let reader: Box<dyn BufRead> = match args.next() {
             Some(arg) => {
-                let f = File::open(&arg);
-                if let Err(e) = f {
-                    let formattederr = format!("Cannot open {}: {}", arg, e);
-                    return Err(formattederr);
+                match File::open(&arg) {
+                    Err(e) => return Err(format!("Cannot open {}: {}", arg, e)),
+                    Ok(f) => Box::new(BufReader::new(f))
                 }
-                Box::new(BufReader::new(f.unwrap()))
             },
             None => Box::new(io::stdin().lock()),
         };
@@ -71,17 +69,17 @@ impl Config {
     }
 }
 
-pub fn search<'a>(query: &'a str, lines: Lines<Box<dyn BufRead>>) -> impl Iterator<Item = String> + 'a {
-    lines
+pub fn search<'a>(query: &'a str, lines: Lines<Box<dyn BufRead>>) -> Box<dyn Iterator<Item = String> + 'a> {
+    Box::new(lines
         .map(|l| l.unwrap())
-        .filter(move |line| line.contains(query))
+        .filter(move |line| line.contains(query)))
 }
 
-pub fn search_case_insensitive<'a>(query: &str, lines: Lines<Box<dyn BufRead>>) -> impl Iterator<Item = String> + 'a {
+pub fn search_case_insensitive<'a>(query: &str, lines: Lines<Box<dyn BufRead>>) -> Box<dyn Iterator<Item = String> + 'a> {
     let query = query.to_lowercase();
-    lines
+    Box::new(lines
         .map(|l| l.unwrap())
-        .filter(move |line| line.to_lowercase().contains(&query))
+        .filter(move |line| line.to_lowercase().contains(&query)))
 }
 
 #[cfg(test)]
