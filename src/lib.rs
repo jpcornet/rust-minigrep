@@ -69,13 +69,13 @@ impl Config {
     }
 }
 
-pub fn search<'a>(query: &'a str, lines: Lines<Box<dyn BufRead>>) -> Box<dyn Iterator<Item = String> + 'a> {
+pub fn search<'a>(query: &'a str, lines: Lines<Box<dyn BufRead + 'a>>) -> Box<dyn Iterator<Item = String> + 'a> {
     Box::new(lines
         .map(|l| l.unwrap())
         .filter(move |line| line.contains(query)))
 }
 
-pub fn search_case_insensitive<'a>(query: &str, lines: Lines<Box<dyn BufRead>>) -> Box<dyn Iterator<Item = String> + 'a> {
+pub fn search_case_insensitive<'a>(query: &str, lines: Lines<Box<dyn BufRead + 'a>>) -> Box<dyn Iterator<Item = String> + 'a> {
     let query = query.to_lowercase();
     Box::new(lines
         .map(|l| l.unwrap())
