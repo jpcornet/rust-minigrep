@@ -103,7 +103,8 @@ Pick three.
 Duct tape.";
 
         let input = to_bufread(contents);
-        assert_eq!(Some("safe, fast, productive.".to_string()), search(query, input.lines()).next());
+        let result: Vec<String> = search(query, input.lines()).collect();
+        assert_eq!(vec!["safe, fast, productive."], result);
     }
 
     #[test]
@@ -116,9 +117,7 @@ Pick three.
 Trust me.";
 
         let input = to_bufread(contents);
-        let mut result = search_case_insensitive(query, input.lines());
-        assert_eq!(Some("Rust:".to_string()), result.next());
-        assert_eq!(Some("Trust me.".to_string()), result.next());
-        assert_eq!(None, result.next());
+        let result: Vec<String> = search_case_insensitive(query, input.lines()).collect();
+        assert_eq!(vec!["Rust:", "Trust me."], result);
     }
 }
